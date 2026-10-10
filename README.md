@@ -1,6 +1,6 @@
-# 🛡️ icoCrypt — Hardware-Accelerated Secure Firmware Update and Boot System
+# 🛡️ PicoCrypt — Hardware-Accelerated Secure Firmware Update and Boot System
 
-**Using PicoRV32, AES-128 Hardware, ESP32-S3 Wi-Fi Gateway, and ZedBoard FPGA**
+**Using PicoRV32, AES-128 Hardware, ESP32-S3 Wi-Fi Gateway, and ZedBoard FPGA for Defense-Oriented Applications**
 
 ![Language](https://img.shields.io/badge/Language-Verilog%20%7C%20C%20%7C%20JavaScript-blue)
 ![Processor](https://img.shields.io/badge/Processor-PicoRV32-orange)
@@ -10,143 +10,190 @@
 ![Platform](https://img.shields.io/badge/Platform-FPGA%20%7C%20Embedded-lightgrey)
 ![Status](https://img.shields.io/badge/Status-Under%20Development-yellow)
 
-> **Project status:** This project is under active development. The complete dashboard-to-FPGA update flow is still being integrated and verified. Features described as intended functionality should not be considered operational until the corresponding tests pass.
+> **Project Status:** Under Development — Individual modules and end-to-end integration are being developed and verified. Features described as intended functionality must not be considered operational until their corresponding tests pass.
 
 ---
 
 ## 📌 Overview
 
-**icoCrypt** is a web-based secure firmware deployment dashboard designed for an FPGA-based embedded system. The proposed architecture combines a browser dashboard, an ESP32-S3 Wi-Fi gateway, and a ZedBoard FPGA running a PicoRV32-based SoC with AES-128 cryptographic hardware and secure boot control logic.
+**PicoCrypt** is a web-based secure firmware deployment dashboard designed for an FPGA-based firmware update and boot system. The proposed architecture integrates a browser dashboard, an ESP32-S3 Wi-Fi gateway, and a ZedBoard FPGA running a PicoRV32-based SoC with AES-128 cryptographic hardware and secure boot control logic.
 
-The dashboard allows the user to select a raw firmware binary (`.bin`), calculate its SHA-256 digest, encrypt the payload in the browser using AES-128 (CBC or CTR, depending on the configured implementation), and upload the encrypted package over the local Wi-Fi network to the ESP32-S3.
+The dashboard is designed to allow users to select a raw firmware binary (`.bin`), calculate its SHA-256 digest, encrypt the firmware in the browser using AES-128 in the configured CBC or CTR mode, and upload the encrypted package over a local Wi-Fi network to the ESP32-S3.
 
 The ESP32-S3 gateway is intended to:
 
-- Connect to the same Wi-Fi network as the host laptop using a WiFiManager configuration portal.
+- Connect to the same local Wi-Fi network as the host laptop using a WiFiManager configuration portal.
 - Receive the encrypted firmware package and metadata through an HTTP upload endpoint.
-- Store the received package in its LittleFS filesystem.
-- Transfer the stored package to the ZedBoard FPGA over UART using XMODEM-CRC.
+- Store the uploaded package in its LittleFS filesystem.
+- Transfer the stored package to the ZedBoard over UART using XMODEM-CRC.
 
-The FPGA-based SoC is intended to receive the firmware, stage the image in memory, use the AES-128 hardware accelerator for configured cryptographic operations, verify the firmware using the implemented security mechanism, and permit execution only after the required validation checks succeed.
+On the FPGA, the PicoRV32 processor controls the SoC peripherals through memory-mapped I/O (MMIO). The system is intended to receive and stage the firmware, perform the configured AES operation, validate the firmware using an implemented integrity and authenticity mechanism, and permit execution only when the required checks succeed.
 
-This project follows a hardware-software co-design approach involving FPGA RTL development, embedded C, ESP32 firmware, browser-side cryptography, peripheral integration, and simulation.
+The project follows a hardware–software co-design approach involving Verilog RTL, embedded C, ESP32-S3 firmware, browser-side JavaScript, peripheral integration, and RTL simulation.
+
+**Project focus:** Research and prototyping of hardware-accelerated cryptographic processing and secure firmware deployment for defense-oriented embedded systems.
+
+---
 
 ## 🎯 Project Objectives
 
 - Integrate the PicoRV32 RISC-V processor into a custom FPGA-based SoC.
-- Develop a browser-based firmware deployment dashboard.
-- Transfer encrypted firmware from the laptop to the ESP32-S3 over local Wi-Fi.
-- Receive firmware packages through an HTTP upload server.
-- Store uploaded packages in ESP32-S3 LittleFS.
+- Develop a web-based firmware deployment dashboard called PicoCrypt.
+- Select and prepare raw firmware binary files.
+- Calculate SHA-256 digests for firmware integrity checking.
+- Encrypt firmware in the browser using the configured AES-128 mode.
+- Connect the ESP32-S3 gateway to the host laptop's local Wi-Fi network.
+- Upload encrypted firmware through HTTP.
+- Store uploaded firmware packages in ESP32-S3 LittleFS.
 - Transfer firmware from the ESP32-S3 to the ZedBoard using UART and XMODEM-CRC.
-- Develop UART communication and receive-buffering logic.
-- Integrate AES-128 hardware acceleration.
-- Connect peripherals through memory-mapped I/O (MMIO).
-- Develop embedded C drivers for peripheral access.
-- Implement firmware update management and secure boot control.
-- Verify the system incrementally through simulation and hardware testing.
+- Receive and buffer serial data using UART and FIFO logic.
+- Integrate AES-128 hardware acceleration into the FPGA SoC.
+- Connect the processor and peripherals through MMIO.
+- Coordinate firmware staging, verification, and boot decisions.
+- Verify individual modules before demonstrating the complete update workflow.
+
+---
 
 ## 🏗️ Complete System Architecture
 
 ```text
-                 HOST LAPTOP / PC
-              ┌──────────────────────┐
-              │  icoCrypt Dashboard  │
-              │                      │
-              │ Select firmware .bin │
-              │ Calculate SHA-256    │
-              │ AES-128 encryption   │
-              │ HTTP upload          │
-              └──────────┬───────────┘
-                         │
-                   Same Wi-Fi Network
-                         │
-                    HTTP Upload
-                         │
-                         ▼
-              ┌──────────────────────┐
-              │    ESP32-S3 Gateway  │
-              │                      │
-              │ WiFiManager          │
-              │ HTTP Upload Server   │
-              │ LittleFS Storage     │
-              │ XMODEM-CRC UART TX   │
-              └──────────┬───────────┘
-                         │
-                  UART TX / RX / GND
-                   XMODEM-CRC Transfer
-                         │
-                         ▼
-┌──────────────────────────────────────────────────────────────┐
-│                       ZEDBOARD FPGA                          │
-│                                                              │
-│  ┌──────────────────┐        ┌───────────────────────────┐  │
-│  │ UART RX / TX     │───────▶│ RX FIFO / Buffering       │  │
-│  └──────────────────┘        └─────────────┬─────────────┘  │
-│                                            │                │
-│                                    ┌───────▼────────┐       │
-│                                    │ PicoRV32 CPU   │       │
-│                                    │ RISC-V Core    │       │
-│                                    └───────┬────────┘       │
-│                                            │                │
-│                                    ┌───────▼────────┐       │
-│                                    │ MMIO           │       │
-│                                    │ Interconnect   │       │
-│                                    └───┬────┬────┬───┘      │
-│                                        │    │    │          │
-│                       ┌────────────────┘    │    └──────┐   │
-│                       ▼                     ▼           ▼   │
-│                ┌────────────┐       ┌────────────┐ ┌────────┐
-│                │ AES-128    │       │ Firmware   │ │ Secure │
-│                │ Accelerator│       │ Memory     │ │ Boot   │
-│                └────────────┘       └────────────┘ │ FSM    │
-│                                                    └────────┘
-│                                                              │
-│               Clock, Reset, Status and Control               │
-└──────────────────────────────────────────────────────────────┘
+                    HOST LAPTOP / PC
+              ┌──────────────────────────┐
+              │     PicoCrypt Dashboard  │
+              │                          │
+              │  Select firmware (.bin)  │
+              │  Calculate SHA-256       │
+              │  AES-128 encryption      │
+              │  HTTP firmware upload    │
+              └────────────┬─────────────┘
+                           │
+                    Local Wi-Fi Network
+                           │ HTTP
+                           ▼
+              ┌──────────────────────────┐
+              │      ESP32-S3 Gateway    │
+              │                          │
+              │  WiFiManager              │
+              │  HTTP Upload Server       │
+              │  LittleFS File Storage    │
+              │  XMODEM-CRC UART Sender   │
+              └────────────┬─────────────┘
+                           │
+                     UART TX / RX / GND
+                     XMODEM-CRC Transfer
+                           │
+                           ▼
+┌────────────────────────────────────────────────────────────┐
+│                     ZEDBOARD FPGA                           │
+│                                                            │
+│  ┌───────────────────┐                                     │
+│  │ UART RX / TX      │                                     │
+│  └─────────┬─────────┘                                     │
+│            ▼                                               │
+│  ┌───────────────────┐                                     │
+│  │ RX FIFO / Buffer  │                                     │
+│  └─────────┬─────────┘                                     │
+│            ▼                                               │
+│  ┌───────────────────┐                                     │
+│  │ PicoRV32 CPU      │                                     │
+│  │ RISC-V Processor  │                                     │
+│  └─────────┬─────────┘                                     │
+│            ▼                                               │
+│  ┌───────────────────┐                                     │
+│  │ MMIO Interconnect │                                     │
+│  │ Address Decoder   │                                     │
+│  └──────┬─────┬──────┴─────────┐                           │
+│         │     │                │                           │
+│         ▼     ▼                ▼                           │
+│  ┌──────────┐ ┌────────────┐ ┌──────────────────┐          │
+│  │ AES-128  │ │ Firmware   │ │ Secure Boot      │          │
+│  │ Hardware │ │ Staging /  │ │ Controller FSM   │          │
+│  │          │ │ Program RAM│ │                  │          │
+│  └──────────┘ └────────────┘ └──────────────────┘          │
+│                                                            │
+│            Clock, Reset, Status and Control                │
+└────────────────────────────────────────────────────────────┘
 ```
 
-*This is the intended architecture. Actual signal connections, address maps, memory behavior, and security functions must be confirmed against the current RTL and embedded firmware.*
+*This diagram represents the intended architecture. Actual signal paths, register addresses, memory behavior, and security checks must be confirmed against the current RTL and embedded software.*
+
+---
 
 ## 🔄 End-to-End Firmware Deployment Workflow
 
-1. **Select firmware:** The user selects a firmware binary (`.bin`) in the icoCrypt dashboard.
-2. **Prepare the package:** The dashboard calculates the SHA-256 digest and encrypts the payload using the configured AES-128 mode.
-3. **Connect to Wi-Fi:** The ESP32-S3 joins the same local Wi-Fi network as the laptop using WiFiManager.
-4. **Discover the gateway:** The dashboard discovers or connects to the ESP32-S3 using the mechanism implemented in the application.
-5. **Upload firmware:** The encrypted payload and required metadata are uploaded to the ESP32-S3 through HTTP.
-6. **Store the package:** The ESP32-S3 stores the received package in LittleFS.
-7. **Transfer over UART:** The ESP32-S3 reads the stored file and transfers it to the ZedBoard using XMODEM-CRC.
-8. **Receive the image:** The FPGA UART receives the serial data, and the SoC stages the image in the configured memory region.
-9. **Decrypt:** The PicoRV32-controlled AES hardware performs the configured cryptographic operation.
-10. **Verify:** The system validates the firmware using the implemented integrity and authenticity mechanism.
-11. **Accept or reject:** The boot controller makes a decision based on the verification result and applicable update policy.
-12. **Boot accepted firmware:** Execution is permitted only when the required validation checks succeed.
+### Stage 1: Firmware Preparation
 
-The complete workflow remains a development objective until it has been demonstrated successfully end to end.
+1. The user opens the PicoCrypt web dashboard.
+2. The user selects a firmware binary file (`.bin`).
+3. The dashboard calculates the firmware's SHA-256 digest.
+4. The dashboard encrypts the firmware using the configured AES-128 mode.
+5. The dashboard prepares the payload and required metadata.
 
-## 🧩 Hardware and System Components
+### Stage 2: Wi-Fi Upload to ESP32-S3
 
-### 1. PicoRV32 RISC-V Processor
+6. The ESP32-S3 connects to the same local Wi-Fi network as the laptop using WiFiManager.
+7. The dashboard discovers or connects to the ESP32-S3 using the mechanism implemented by the application.
+8. The encrypted firmware package is uploaded to the ESP32-S3 over HTTP.
+9. The ESP32-S3 stores the uploaded package and metadata in LittleFS.
 
-PicoRV32 is the processor core used to execute embedded firmware and control the SoC peripherals.
+### Stage 3: UART Transfer to ZedBoard
 
-The project integrates the existing open-source processor into a custom system rather than designing a CPU from scratch.
+10. The ESP32-S3 reads the stored firmware package.
+11. The gateway sends the package over UART using XMODEM-CRC.
+12. The FPGA UART receiver receives the serial data.
+13. The RX FIFO buffers incoming data until it is consumed by the processor or associated logic.
+14. PicoRV32 and the update-control logic manage the reception and staging process.
 
-Responsibilities include:
+### Stage 4: Cryptographic Processing and Verification
 
-- Executing embedded firmware.
-- Controlling peripherals through MMIO.
-- Managing firmware update operations.
-- Coordinating cryptographic processing and boot-control operations.
+15. The processor configures the AES-128 hardware through MMIO.
+16. The AES accelerator performs the configured cryptographic operation.
+17. The system verifies firmware integrity and authenticity using the implemented security mechanism.
+18. The secure boot controller evaluates the validation result.
+19. Invalid firmware must be rejected.
+20. Firmware execution should be permitted only after all required validation checks succeed.
 
-Reference: https://github.com/YosysHQ/picorv32
+The complete sequence is the intended workflow. It should be described as fully operational only after end-to-end testing confirms each stage.
 
-### 2. UART Communication Interface
+---
 
-UART (Universal Asynchronous Receiver/Transmitter) provides serial communication between the ESP32-S3 gateway and the FPGA.
+## 🧩 Main Hardware and Software Components
 
-The UART subsystem may include:
+### 1. PicoCrypt Web Dashboard
+
+The browser dashboard provides the interface for preparing and deploying firmware.
+
+**Intended responsibilities:**
+
+- Firmware `.bin` selection.
+- SHA-256 digest calculation.
+- Browser-side AES-128 encryption.
+- ESP32-S3 discovery or connection.
+- HTTP upload of the encrypted package and metadata.
+- Upload progress and result reporting, if implemented.
+
+**Important security note:** A SHA-256 digest is useful for detecting changes when compared against a trusted expected digest. If an attacker can replace both the firmware and its digest, the digest alone does not establish firmware authenticity.
+
+### 2. ESP32-S3 Wi-Fi Gateway
+
+The ESP32-S3 acts as the bridge between PicoCrypt and the FPGA.
+
+| Component | Responsibility |
+|---|---|
+| WiFiManager | Configure the gateway's Wi-Fi connection |
+| HTTP upload server | Receive encrypted firmware and metadata |
+| LittleFS | Store the received package in ESP32-S3 flash |
+| UART sender | Transmit the stored package to the ZedBoard |
+| XMODEM-CRC | Provide block-based serial transfer with CRC error detection |
+| Status handling | Report transfer results if implemented |
+
+LittleFS on the ESP32-S3 is gateway staging storage. It is separate from the firmware memory inside the FPGA.
+
+### 3. UART Communication Interface
+
+UART provides serial communication between the ESP32-S3 and ZedBoard.
+
+Relevant FPGA modules may include:
 
 - `uart_rx.v` — UART receive logic.
 - `uart_tx.v` — UART transmit logic.
@@ -154,95 +201,114 @@ The UART subsystem may include:
 - `rx_fifo.v` — Receive FIFO.
 - SoC-level UART integration logic.
 
-The UART configuration, pin assignments, baud rate, and handshake behavior must match on both devices.
+The RX FIFO temporarily stores received bytes until the processor or associated logic consumes them.
 
-### 3. Receive FIFO
+**Typical UART wiring:**
 
-The RX FIFO temporarily stores incoming bytes until the processor or associated logic consumes them.
+- ESP32-S3 TX → ZedBoard UART RX
+- ESP32-S3 RX ← ZedBoard UART TX
+- ESP32-S3 GND ↔ ZedBoard GND
 
-Its responsibilities include:
+Confirm the actual pin mapping, baud rate, UART interface, and voltage compatibility before connecting the hardware.
 
-- Buffering incoming UART data.
-- Managing read and write operations.
-- Tracking FIFO occupancy.
-- Reporting empty and full conditions.
-- Helping bridge differences between serial data reception and processor data consumption.
+### 4. PicoRV32 RISC-V Processor
 
-### 4. AES-128 Hardware Accelerator
+PicoRV32 is the processor core used to execute embedded firmware and coordinate peripheral operations.
 
-AES-128 (Advanced Encryption Standard with a 128-bit key) is the cryptographic hardware component of the project.
+Responsibilities include:
 
-The accelerator is intended to offload configured cryptographic operations from software to dedicated RTL hardware.
+- Executing embedded C instructions.
+- Accessing peripherals through MMIO.
+- Controlling UART and AES operations.
+- Coordinating firmware-update and boot-control operations.
 
-A processor-facing interface may include:
+This project integrates the existing PicoRV32 core rather than designing a processor from scratch.
+
+Reference: [YosysHQ PicoRV32](https://github.com/YosysHQ/picorv32)
+
+### 5. Memory-Mapped I/O (MMIO)
+
+MMIO assigns address ranges to peripheral registers. The CPU accesses those registers through normal load and store instructions.
+
+The MMIO interconnect and address decoder route CPU requests to the appropriate memory or peripheral.
+
+The hardware RTL and C drivers must agree on:
+
+- Peripheral base addresses.
+- Register offsets.
+- Access widths and byte enables.
+- Start, busy, done, error, and status bits.
+- Bus-ready and wait-state behavior.
+
+A mismatch between software register definitions and RTL decoding can cause peripheral accesses to fail or the processor to wait indefinitely.
+
+### 6. AES-128 Hardware Accelerator
+
+AES-128 is a symmetric-key block cipher that operates on 128-bit data blocks using a 128-bit key.
+
+The hardware accelerator is intended to offload configured cryptographic operations from the CPU.
+
+A typical interface may include:
 
 - Key registers.
 - Input-data registers.
-- Control and start registers.
-- Busy/done status registers.
+- Start/control register.
+- Busy/done status register.
 - Output-data registers.
 
-The exact register map must match the implemented RTL and embedded C driver.
+The exact interface depends on the actual RTL implementation.
 
-**Security note:** AES encryption alone does not authenticate firmware. The system must also verify that the image originates from an authorized source and has not been modified.
+**AES encryption alone does not authenticate firmware.**
 
-### 5. Firmware Memory
+- AES-CBC and AES-CTR provide confidentiality when used correctly, but do not authenticate the firmware by themselves.
+- XMODEM-CRC detects certain transmission errors but does not authenticate the sender.
+- SHA-256 alone does not establish who produced a firmware image.
+- Firmware authenticity requires a correctly verified MAC, such as AES-CMAC or HMAC with a protected key, or a digital signature checked against a trusted public key.
 
-The FPGA firmware-memory subsystem is intended to store firmware data used during update and boot operations.
+Only claim a particular authentication mechanism is implemented when the relevant RTL/software and tests confirm it.
 
-Different storage locations serve different purposes:
+### 7. Firmware Memory
 
-- **ESP32-S3 LittleFS:** Stores the uploaded package in the gateway's flash filesystem.
-- **FPGA BRAM/RAM:** May hold processor instructions, working data, or a staged firmware image.
-- **External nonvolatile flash:** Can retain firmware across power cycles when the appropriate hardware interface and control logic are implemented.
+The FPGA firmware memory may use RAM or BRAM to store program instructions, working data, or a staged firmware image.
 
-A simulation `.hex` file is an initialization input; it is not automatically persistent firmware storage on the FPGA.
+The exact behavior depends on the memory map and implemented control logic.
 
-### 6. Secure Boot Controller
+- **ESP32-S3 LittleFS:** stores the uploaded package at the gateway.
+- **FPGA BRAM/RAM:** may store program code, working data, or staged firmware.
+- **External nonvolatile flash:** is needed for persistent FPGA-side firmware storage across power cycles if the design requires it and includes the necessary interface.
+
+A simulation `.hex` file used to initialize memory is not automatically persistent storage on the physical FPGA.
+
+### 8. Secure Boot Controller
 
 The secure boot controller coordinates boot-related state transitions and update decisions.
 
-Intended responsibilities include:
+Its intended responsibilities include:
 
 - Managing boot and update states.
 - Coordinating firmware validation.
-- Reporting controller status.
+- Reporting status.
 - Controlling whether execution may proceed.
-- Rejecting firmware when required validation fails.
+- Handling rejected updates according to the implemented design.
 
-Secure boot is only effective when the boot decision depends on trustworthy verification results and the system protects its trust anchors.
+Secure boot is effective only when execution is actually gated by trustworthy verification results.
 
-### 7. Memory-Mapped I/O (MMIO)
+---
 
-MMIO allows the processor to access peripheral registers through defined memory addresses.
+## 💻 Embedded Software and Drivers
 
-The SoC interconnect connects the PicoRV32 processor with the required memory and peripheral interfaces.
+Embedded C software is intended to execute on PicoRV32 and communicate with hardware through MMIO.
 
-The embedded drivers and RTL must agree on:
-
-- Peripheral base addresses and register offsets.
-- Access widths and byte enables.
-- Start, busy, done, error, and status bits.
-- CPU bus completion and wait behavior.
-
-A mismatch between a driver's register address and the RTL address decoder can prevent the intended peripheral from responding.
-
-## 💻 Embedded Software
-
-The embedded software is written in C and is intended to execute on the PicoRV32 processor.
-
-### Driver Responsibilities
-
-| Component | Responsibility |
+| Software component | Responsibility |
 |---|---|
-| UART driver | Initialize UART and transmit or receive data |
-| GPIO driver | Access implemented GPIO registers |
-| AES driver | Configure and control the AES hardware |
-| Memory driver | Access the implemented firmware-memory interface |
-| Update manager | Coordinate firmware-update states |
-| Bootloader | Perform boot-time checks and select firmware for execution |
+| UART driver | Transmit and receive serial data using the implemented registers |
+| AES driver | Configure and control the AES accelerator |
+| GPIO driver | Access GPIO registers if implemented |
+| Memory driver | Access the actual firmware memory interface |
+| Update manager | Coordinate firmware-update stages and error handling |
+| Bootloader | Perform boot-time checks and select accepted firmware |
 
-Driver interfaces must match the actual hardware register map.
+The software driver register definitions must match the actual hardware register map.
 
 ### Illustrative MMIO Example
 
@@ -262,79 +328,79 @@ uint32_t peripheral_read(void)
 }
 ```
 
-This is an illustrative example only. The address shown is not a universal address for the project's peripherals. Confirm the actual register address in the integrated RTL before using it in firmware.
+This is only an illustrative example. The address `0x10000000` must not be assumed to be the correct address for a particular peripheral without checking the integrated RTL.
+
+---
 
 ## 🧪 Simulation and Verification
 
-The project uses RTL simulation to evaluate hardware behavior and system integration.
+The project uses RTL simulation to debug hardware behavior and processor/peripheral integration.
 
-A full-SoC testbench and Tcl simulation flow have been prepared for ModelSim/QuestaSim. Actual pass/fail status must be based on observed simulation logs and test results.
+A full-SoC testbench and Tcl simulation flow have been prepared for ModelSim/QuestaSim. Passing status must be based on the current simulation logs and test results.
 
-### Verification Targets
+### Suggested Verification Order
 
-- Clock and reset operation.
-- UART transmission and reception.
-- RX FIFO buffering and data access.
-- PicoRV32 MMIO transactions.
-- AES-128 known-answer test vectors.
-- Processor/peripheral interaction.
-- Secure boot controller state transitions.
-- Firmware update and application-execution behavior.
-- ESP32-S3 HTTP upload and LittleFS file handling.
-- UART/XMODEM-CRC transfer from the ESP32-S3 to the ZedBoard.
-- Rejection of corrupted or unauthorized firmware.
+1. **Compilation and elaboration:** Confirm all modules compile and dependencies are included.
+2. **Clock and reset:** Verify that the processor and peripherals leave reset correctly.
+3. **CPU/MMIO:** Confirm that the CPU can access memory and peripheral registers.
+4. **UART/FIFO:** Test serial reception, transmission, FIFO status, and byte ordering.
+5. **AES-128:** Run a known-answer test and compare the result with the expected ciphertext.
+6. **Boot controller:** Verify state transitions and rejection behavior.
+7. **ESP32-S3 gateway:** Test Wi-Fi, HTTP upload, LittleFS read/write, and UART transfer separately.
+8. **End-to-end deployment:** Demonstrate the full dashboard-to-FPGA update flow.
+9. **Negative testing:** Test corrupted data, invalid authentication, interrupted transfer, and reset during an update.
 
 ### AES-128 Known-Answer Test
 
-Use this standard AES-128 encryption vector when testing a compatible implementation:
+For a compatible AES-128 encryption implementation, use the following standard test vector:
 
 - **Key:** `000102030405060708090a0b0c0d0e0f`
 - **Plaintext:** `00112233445566778899aabbccddeeff`
 - **Expected ciphertext:** `69c4e0d86a7b0430d8cdb78070b4c55a`
 
-Confirm byte ordering and register packing in the actual accelerator before comparing results.
+Confirm byte ordering and register packing in the actual accelerator before comparing the result.
 
 ### Simulation Environment
 
 | Technology | Purpose |
 |---|---|
 | Verilog HDL | Hardware design |
-| PicoRV32 | RISC-V processor |
+| PicoRV32 | RISC-V processor core |
 | ModelSim / QuestaSim | RTL simulation |
 | Tcl | Simulation automation |
 | C | Embedded firmware and drivers |
-| FPGA tools | Synthesis, implementation, and hardware validation |
+| FPGA development tools | Synthesis, implementation, and hardware validation |
 
 ### Running the Simulation
 
-The repository may contain a Tcl script named `run_secure_soc_full.tcl`.
-
-From the appropriate simulator working directory, run:
+If the repository contains `run_secure_soc_full.tcl`, run it from the appropriate simulator working directory:
 
 ```tcl
 do run_secure_soc_full.tcl
 ```
 
-Before running the script, verify that:
+Before running, confirm:
 
 - All RTL dependencies are included.
 - The firmware image exists at the configured path.
 - The testbench references the correct top-level module.
 - File paths are valid on the current machine.
-- The simulator compile order matches module dependencies.
+- The compilation order matches module dependencies.
 
-Prefer repository-relative paths where practical to make simulation reproducible across computers.
+Repository-relative paths are recommended where practical.
+
+---
 
 ## 📁 Suggested Project Structure
 
-The following structure is illustrative. Keep the actual filenames and paths aligned with the repository.
+The structure below is illustrative. Use the actual file names and folders in the repository.
 
 ```text
 picorv32-secure-firmware-update-defense/
-├── dashboard/                  # icoCrypt web dashboard, if stored here
-├── esp32_gateway/              # ESP32-S3 firmware, if stored here
+├── dashboard/                  # PicoCrypt web dashboard, if stored here
+├── esp32_gateway/               # ESP32-S3 firmware, if stored here
 │   ├── src/
-│   └── platformio.ini          # or the actual build configuration
+│   └── platformio.ini           # Or the actual build configuration
 ├── rtl/
 │   ├── uart_rx.v
 │   ├── uart_tx.v
@@ -347,8 +413,8 @@ picorv32-secure-firmware-update-defense/
 │   └── secure_soc_top.v
 ├── firmware/
 │   ├── drivers/
-│   ├── update_manager.c        # if implemented
-│   ├── bootloader.c            # if implemented
+│   ├── update_manager.c          # If implemented
+│   ├── bootloader.c              # If implemented
 │   └── main.c
 ├── firmware_aes/
 │   └── system_firmware.hex
@@ -361,69 +427,70 @@ picorv32-secure-firmware-update-defense/
 └── README.md
 ```
 
-*This is a suggested documentation layout. It does not imply that every listed file has already been created.*
+The suggested layout does not imply that every listed file has already been created.
+
+---
 
 ## 🔐 Security Considerations
 
-- **Confidentiality:** Use AES-128 with an appropriate mode and correct key handling where confidentiality is required.
-- **Integrity:** Detect modifications to firmware data.
-- **Authenticity:** Verify that an update is authorized by a trusted source.
+- **Confidentiality:** Use AES-128 with an appropriate mode and correct key handling.
+- **Integrity:** Detect changes to firmware data.
+- **Authenticity:** Verify that firmware comes from an authorized source.
 - **Anti-rollback:** Prevent unauthorized downgrades if version protection is implemented.
-- **Secure boot:** Require successful verification before executing the selected firmware.
-- **Recovery:** Define safe behavior for rejected updates or interrupted writes.
+- **Secure boot:** Gate execution on successful validation.
+- **Recovery:** Define safe behavior for rejected or interrupted updates.
 - **Key protection:** Protect cryptographic keys against unauthorized access.
-- **Transport security:** Local Wi-Fi and HTTP should not be assumed secure against every attacker.
+- **Transport security:** Do not assume that local Wi-Fi or HTTP is protected against every attacker.
 
-SHA-256 detects changes only when compared against a trusted digest. AES-CBC/CTR provide encryption but do not authenticate the firmware on their own. XMODEM-CRC helps detect transmission errors but does not authenticate the sender.
+These are design requirements, not a claim that all protections have already been implemented. Deployment in operational defense systems would require a defined threat model, appropriate authentication, protected key storage, fault testing, and independent security evaluation.
 
-A secure update system should use a properly verified MAC, such as AES-CMAC or HMAC with a protected key, or a suitable digital-signature scheme. Only describe these as implemented if the corresponding RTL/software and tests support them.
-
-These are design requirements, not a claim that all protections are implemented. Defense-grade deployment would require a defined threat model, suitable authentication, protected key storage, fault testing, and independent security evaluation.
+---
 
 ## 🚧 Development Status
 
-The project is under active development. This section distinguishes development artifacts from verified functionality.
+The project is under active development. The presence of source files or modules does not by itself prove correct operation.
 
 ### Development Artifacts Reported
 
 - [x] PicoRV32 selected for processor integration.
 - [x] UART receiver and transmitter RTL modules developed.
-- [x] Baud-rate generation and receive FIFO modules developed.
+- [x] Baud-rate generation and RX FIFO modules developed.
 - [x] Firmware memory and secure boot controller RTL developed.
 - [x] SoC top-level integration and MMIO interface developed.
 - [x] Full-SoC testbench and Tcl simulation flow prepared.
 - [x] Embedded driver source/header development initiated.
-- [ ] ESP32-S3 Wi-Fi, HTTP, LittleFS, and XMODEM-CRC path verified end to end.
-- [ ] Complete dashboard-to-FPGA update flow demonstrated.
 
-### Remaining Verification Tasks
+### Verification and Integration Tasks
 
-- [ ] Confirm all RTL dependencies compile and elaborate successfully.
+- [ ] Confirm all RTL dependencies compile and elaborate.
 - [ ] Verify UART transmission and reception.
-- [ ] Validate AES-128 against known-answer test vectors.
-- [ ] Verify processor-to-peripheral MMIO transactions.
+- [ ] Validate AES-128 using a known-answer test.
+- [ ] Verify CPU-to-peripheral MMIO transactions.
 - [ ] Complete and validate the update manager and bootloader.
 - [ ] Verify firmware integrity and authenticity checks.
-- [ ] Demonstrate the complete host-to-FPGA update flow.
+- [ ] Verify ESP32-S3 Wi-Fi, HTTP, LittleFS, and UART functions.
+- [ ] Demonstrate the complete PicoCrypt-to-FPGA update flow.
 - [ ] Test corrupted and unauthorized firmware rejection.
 - [ ] Verify reset behavior and recovery after update failure.
 - [ ] Complete FPGA implementation and hardware demonstration.
 
-Mark tasks complete only after the corresponding tests pass. The existence of RTL, C source, a dashboard, or a testbench does not by itself prove that the system works end to end.
+Mark each task complete only after its corresponding test passes.
+
+---
 
 ## 🔮 Future Enhancements
-
-Potential improvements include:
 
 - HMAC or digital-signature-based firmware authentication.
 - A/B firmware slots and safe rollback.
 - External SPI flash integration.
-- Anti-rollback protection with trusted version metadata.
+- Anti-rollback protection using trusted version metadata.
 - Watchdog-based recovery.
 - Fault injection for corrupted or interrupted updates.
 - FPGA resource-utilization and timing reports.
 - Hardware-versus-software cryptographic performance benchmarking.
 - Stronger gateway authentication and protected key provisioning.
+
+---
 
 ## 🛠️ Technologies Used
 
@@ -437,14 +504,16 @@ Potential improvements include:
 - UART and XMODEM-CRC
 - Memory-mapped I/O (MMIO)
 - Embedded C
-- Browser-side JavaScript cryptography
+- JavaScript
 - ModelSim / QuestaSim
 - Tcl simulation automation
 - FPGA development tools
 
+---
+
 ## 👥 Project Contributions
 
-### Hardware / FPGA
+### Hardware / FPGA Team
 
 - PicoRV32 SoC integration.
 - UART and FIFO RTL development.
@@ -452,26 +521,29 @@ Potential improvements include:
 - AES hardware and secure boot-control integration.
 - Testbench development and simulation debugging.
 
-### Embedded / Gateway
+### Embedded / Gateway Team
 
-- ESP32-S3 Wi-Fi setup using WiFiManager.
+- ESP32-S3 Wi-Fi configuration using WiFiManager.
 - HTTP firmware upload endpoint.
 - LittleFS package storage.
 - UART/XMODEM-CRC transfer to the ZedBoard.
 - Transfer status and error handling.
 
-### Dashboard / Application
+### Dashboard / Application Team
 
-- Firmware selection and metadata handling.
+- PicoCrypt firmware selection interface.
 - SHA-256 digest calculation.
 - Browser-side AES-128 encryption.
-- ESP32-S3 discovery/connection and HTTP upload interface.
+- ESP32-S3 discovery or connection.
+- HTTP upload interface and status reporting.
 
-The final contribution breakdown should reflect the actual work completed by each team member.
+The final contribution breakdown should reflect the work actually completed by each team member.
+
+---
 
 ## 📄 License
 
-The PicoRV32 core and third-party components retain their respective licensing terms. Select a project-level license only after checking compatibility with all included dependencies.
+The PicoRV32 core and third-party components retain their respective licensing terms. Choose a project-level license only after checking compatibility with all dependencies.
 
 ## 🙏 Acknowledgements
 
@@ -480,4 +552,4 @@ The PicoRV32 core and third-party components retain their respective licensing t
 
 ---
 
-**Project focus:** Research and prototyping of an FPGA-based firmware-update path combining browser-side package preparation, an ESP32-S3 Wi-Fi gateway, UART transfer, PicoRV32 control, AES-128 hardware, and boot-validation logic for defense-oriented embedded-system research.
+**Project Focus:** Research and prototyping of a secure firmware deployment pipeline combining PicoCrypt, an ESP32-S3 Wi-Fi gateway, UART transfer, PicoRV32 control, AES-128 hardware, firmware memory, and boot-validation logic for defense-oriented embedded-system research.
