@@ -2,13 +2,6 @@
 
 **Using PicoRV32, AES-128 Hardware, ESP32-S3 Wi-Fi Gateway, and ZedBoard FPGA for Defense-Oriented Applications**
 
-![Language](https://img.shields.io/badge/Language-Verilog%20%7C%20C%20%7C%20JavaScript-blue)
-![Processor](https://img.shields.io/badge/Processor-PicoRV32-orange)
-![Architecture](https://img.shields.io/badge/Architecture-RISC--V-purple)
-![Cryptography](https://img.shields.io/badge/Cryptography-AES--128-red)
-![Gateway](https://img.shields.io/badge/Gateway-ESP32--S3-green)
-![Platform](https://img.shields.io/badge/Platform-FPGA%20%7C%20Embedded-lightgrey)
-![Status](https://img.shields.io/badge/Status-Under%20Development-yellow)
 
 > **Project Status:** Under Development — Individual modules and end-to-end integration are being developed and verified. Features described as intended functionality must not be considered operational until their corresponding tests pass.
 
