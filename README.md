@@ -3,8 +3,6 @@
 **Using PicoRV32, AES-128 Hardware, ESP32-S3 Wi-Fi Gateway, and ZedBoard FPGA for Defense-Oriented Applications**
 
 
-> **Project Status:** Under Development — Individual modules and end-to-end integration are being developed and verified. Features described as intended functionality must not be considered operational until their corresponding tests pass.
-
 ---
 
 ## 📌 Overview
